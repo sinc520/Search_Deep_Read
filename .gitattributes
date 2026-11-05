@@ -1,0 +1,10 @@
+# 仓库内文本统一用 LF，Windows 检出时由 git 自动转换
+* text=auto eol=lf
+
+# 明确二进制类型，避免被当成文本转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.zip binary
+*.pdf binary
