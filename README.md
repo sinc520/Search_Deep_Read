@@ -146,7 +146,7 @@ DeepSeek 返回 10 条，`authority` 全为 4：DigitalCommons@TMC、ScienceDire
 <项目>/.workbuddy/search-results/      # 默认 project 作用域
 ├── index.jsonl
 └── 2026-11-03/
-    ├── unfolded-protein-response-ire1-xbp1-103838-4fc4.json
+    ├── your-topic-keywords-103838-4fc4.json
     └── q-7c1e2b9d-104203-55e1.json
 ```
 

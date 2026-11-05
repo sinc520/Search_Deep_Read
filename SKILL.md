@@ -1,6 +1,6 @@
 ---
 name: search-deep-read
-version: 1.0.4
+version: 1.0.5
 description: 对单次搜索结果做深度解读：把一次检索返回的整批结果（最多 50 条）存档，主轨先读前 10 条形成初步结论，再由子智能体读全量并只回传增量（矛盾、遗漏、可疑、待核），需要精确引文时定向展开原文。当结果要写进产物、前几条结果互相矛盾、或怀疑来源高度同质（看着十来条其实是同一篇的镜像）时应使用；单跳事实查询、容错高的探索、时效新闻不要用，直接多关键词并发快搜即可。检索层默认走 DeepSeek 搜索 API（单次最多 50 条、按请求计费、多取不加价），中文资讯与国内政策改用内置 WebSearch（腾讯元宝）。
 agent_created: true
 ---
@@ -82,7 +82,7 @@ python scripts/search.py "query" --format json
 <项目>/.workbuddy/search-results/          # 默认（archive-scope=project）
 ├── index.jsonl                            # 一行一次搜索：时间/查询/条数/存档路径
 └── 2026-11-03/
-    ├── unfolded-protein-response-ire1-xbp1-103838-4fc4.json
+    ├── your-topic-keywords-103838-4fc4.json
     └── q-7c1e2b9d-104203-55e1.json        # 全中文查询用哈希命名
 ```
 
