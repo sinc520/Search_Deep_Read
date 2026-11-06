@@ -224,6 +224,65 @@ python scripts/save_yuanbao.py --print    # 只解析、不写盘
 
 **什么时候该存**：同一问题要做双引擎对照、结果要进产物、或要跨会话复用时。日常扫一眼不存——否则 `search-results/` 会堆满一次性东西，`grep index.jsonl` 反而更难找。
 
+### 3.6 作为模块接入：接在哪里、怎么接、以及它不做什么（2026-11-06 加）
+
+**接入点只有一个**：任何流程里「搜索刚刚返回结果」的那一刻。本 skill 只负责把**这一批**读透；宿主的扇数、轮次、输出格式，一概不动。
+
+#### 三条硬约束（写在最前面，是为了防止接入方为了「配合我们」改坏自己）
+
+1. **不改宿主的扇数**。宿主并发 5 个关键词，就深读 5 批；**不要为了「更好读」压成 1 个**——那是丢方向。
+2. **不改宿主的输出格式**。它原来要结论、清单还是报告，都照旧；深读只是把素材质量抬高。
+3. **不改宿主的判定**。要不要继续、要不要收敛，仍归宿主（或人）。
+
+#### 接入两步
+
+```bash
+# ① 每个扇：同一 query 多打一次 DeepSeek，并把元宝结果落盘，然后合并
+python scripts/search.py "<query>" --count 50 --preset brief --show 6
+python scripts/save_yuanbao.py                     # 存最近一次内置 WebSearch
+python scripts/merge.py <元宝存档> <DS 存档> --keep-source --out <合并>.json
+
+# ② 一条命令读透（清单 / 追原文都在同一条命令里）
+python scripts/read.py <合并>.json --limit 10
+python scripts/read.py <合并>.json --expand 3,7 --expand-max 1200
+```
+
+外部来源（Tavily / Exa / Serper / 自建抓取）先过 `ingest.py` 规范成标准存档，下游零改动：
+
+```bash
+python scripts/ingest.py raw.json --list                              # 先看字段
+python scripts/ingest.py raw.json --out 存档.json --query "..." --engine tavily
+python scripts/ingest.py raw.json --map snippet=highlights,url=link --out 存档.json
+```
+
+#### 三行回执（子智能体读完只回这些，宿主照此消费）
+
+```
+[深读] query="..." | 批次 58 条（元宝 10 + DS 48）
+[结论] ① … ② … ③ …（每条带 [#N]）
+[待核] #21 #34 #47 | 存档: <绝对路径>
+```
+
+宿主不需要知道存档结构、编号规则、expand 用法；要追证据时把编号回传即可。
+
+#### 并发规模（N = 宿主的扇数）
+
+| N | 打法 | 主轨上下文 |
+|---|---|---|
+| ≤ 2 | 主轨直读（元宝原文进上下文，判断最准） | ~30–80k 字符 |
+| 3–5 | 主轨直读 1 个「锚点扇」，其余委托子智能体，只收 3 行回执 | ~40–60k |
+| > 5 | **分批 + 收敛**：先快搜定方向，再对 2–3 个扇深读 | ~30k |
+
+N>5 时不要「全扇深读」（5 × 元宝原文即 125–200k 字符，超出窗口），也**不要压成单扇**（丢方向）——正确动作是分批。
+
+#### 它不做什么
+
+- **不做关键词扇出**：多扇归宿主。一旦做，就要维护「何时扇出 / 扇几个 / 怎么合并」的判断层，与宿主已有的并发策略重复。
+- **不做多轮规划与编排**：那是 deep-research 专家团的职责，重写只会更差。
+- **不出报告**：它产出「结论 + 编号 + 存档」，报告由宿主或人来写。
+- **不抓网页正文**：要正文用 `search.py --need_content` 或自己的抓取器。
+- **不接「只给报告、不给 results」的流程**：例如专家团的最终产物是报告文本，没有结果集可插——这不是能力问题，是没有缝。
+
 ## 4. 已知局限
 
 1. **引擎很新**：2026-10-17 才对外开放，中文长尾语料覆盖弱于元宝（元宝底层是搜狗索引 + 腾讯生态）。
@@ -332,6 +391,7 @@ python ~/.workbuddy/skills/search-deep-read/scripts/dump.py <任一存档> --sta
 | 2026-11-05 | v1.0.2–1.0.7：脱敏（示例查询改中性、脱掉英文课题 slug）、补 §0 快速开始与 LICENSE、建立公开仓与 `tools/export_public.py` 发布链、description 覆盖「检索」这一层（此前只描述深读，导致「只想用 DeepSeek 搜一下」不触发） |
 | 2026-11-06 | 新增 `scripts/save_yuanbao.py`：把内置 WebSearch（元宝）的结果转成同构存档（`engine: yuanbao`、按 `call_id` 去重、`--list`/`--pick` 可回溯历史查询）。**零上下文成本**——读会话记录而非重新输出文本。`dump.py` / `search.py` 遇到缺失的 `authority`/`rerank_score` 改为显示 `—`，不再伪造成 -1/0。版本 1.0.7 → 1.1.0 |
 | 2026-11-06 | README 新增 §2.4 双引擎重合度实测（3 对同题同日存档：URL 重合 0–1/10、host 1–3/10、标题相似 1–8/10），说明「页面不重叠但内容可高度重叠」，并记下 `site_name` 不能跨引擎比的方法论坑。版本 1.1.0 → 1.1.1 |
+| 2026-11-06 | 新增 `scripts/read.py`（一条命令：批次头 + 清单 + expand，编号与 dump/search 严格一致）与 `scripts/ingest.py`（Tavily/Exa/Serper/自建结果 → 标准存档，缺 url 跳过不编造）；README 新增 §3.6「作为模块接入」（三条硬约束、三行回执、并发规模的三种打法、**它不做什么**）。版本 1.1.1 → 1.2.0 |
 
 ## 8. 与 LangChain deepagents 的关系（2026-11-04 评估）
 

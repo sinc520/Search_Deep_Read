@@ -1,6 +1,6 @@
 ---
 name: search-deep-read
-version: 1.1.1
+version: 1.2.0
 description: 对单次搜索结果做深度解读，并内置 DeepSeek 搜索 API 的调用封装（单次最多 50 条、按请求计费、多取不加价）。两层用法——① 检索：需要一手源、学术论文、技术文档、英文资料，或需要超过 10 条结果时，用它替代内置 WebSearch；② 深读：把这一次返回的整批结果存档，主轨先读前 10 条形成结论，再派子智能体读全量、只回传增量（矛盾/遗漏/可疑/待核），需要精确引文时定向展开原文。当需要在一批结果里地毯式找全线索（宁可慢也不漏）、结果要写进产物、前几条互相矛盾、或怀疑来源高度同质（看着十来条其实是同一篇的镜像）时使用。单跳事实查询、容错高的探索、时效新闻不要用；中文资讯、政策与企业动态改用内置 WebSearch（腾讯元宝）。
 agent_created: true
 ---
@@ -191,6 +191,7 @@ python scripts/search.py "query" --expand 1-3
 
 - `scripts/search.py` —— 检索与存档，无第三方依赖，Python 3.10+
 - `scripts/save_yuanbao.py` —— 把内置 WebSearch（元宝）的结果也存成同构存档；双引擎对照、结果要进产物时先跑它（详见 README §3.5）
+- `scripts/read.py` / `scripts/ingest.py` —— 一条命令入口（批次头+清单+`--expand`）/ 把其他引擎结果规范成标准存档；接入见 README §3.6
 - `scripts/dump.py` —— **读存档**：提取字段白名单（给子智能体）或输出站点/权威/重复分布。字段定义只在此一处，改字段改它，不用动文档
 - `references/subagent-prompt.md` —— 派子智能体时才读的指令规范
 - `scripts/merge.py` —— 【实验·未并入流程】跨存档合并，多关键词结果合成一个池子。见 README「实验区」
