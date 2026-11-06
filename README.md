@@ -165,6 +165,37 @@ DeepSeek 返回 10 条，`authority` 全为 4：DigitalCommons@TMC、ScienceDire
 
 **读取纪律**（写进 SKILL.md）：先查 index，用 `--replay` 复用旧结果，**不要整文件读进上下文**。一次 6 条结果的存档约 22 KB，整读相当于把当初省下的 token 又花一遍。
 
+### 3.5 元宝的结果也存档（`save_yuanbao.py`，2026-11-06 加）
+
+内置 WebSearch（腾讯元宝）的结果**只进上下文、不落盘**：长会话里工具结果会被 microcompact 清理，跨会话更看不到。于是「上周那个查询元宝给了哪几条」只能翻会话记录考古，也没法和 DeepSeek 那批放在一起比对。
+
+`save_yuanbao.py` 把会话记录里的那批结果转成**与 `search.py` 同构的存档**，写进同一目录、同一个 `index.jsonl`（多一个 `engine: "yuanbao"` 字段），所以 `dump.py` / `merge.py` / `--replay` **零改动**就能读。
+
+```bash
+python scripts/save_yuanbao.py            # 存最近一次 WebSearch
+python scripts/save_yuanbao.py --list 10  # 先看有哪些（带「已存/未存」标记）
+python scripts/save_yuanbao.py --pick 3   # 存倒数第 3 次，可回溯历史查询
+python scripts/save_yuanbao.py --print    # 只解析、不写盘
+```
+
+**上下文成本为零**：脚本读的是磁盘上已有的会话记录（`type=function_call_result`、`name=WebSearch`、`output.text`），不需要把结果文本再输出一遍。若改成「让模型转写一遍」，一次 2–4 万字符等于把存档的代价翻倍。
+
+**字段差异（不要硬套 DeepSeek 那套语义）**：
+
+| 字段 | DeepSeek | 元宝 |
+|---|---|---|
+| `snippet` | 100–400 字，查询相关的中段切片 | **就是唯一一档正文**，实测 647–6000 字 |
+| `summary` / `content` | 有，600–4500 字 / 需 `need_content` | **没有**，留空 |
+| `authority` / `rerank_score` | 0–4 / 0–3 | **没有**，写 `null`，展示为 `—` |
+| `date` | 条目日期 | 不提供，留空；检索日期记在顶层 `search_date` |
+| 排名 | 引擎返回顺序（rerank 降序） | 同左，另存 `rank` |
+
+**去重**：按 `call_id`。同一批结果重复跑不会写第二份，要覆盖加 `--force`。
+
+**风险**：这条链路依赖会话记录的内部格式。客户端升级后若失效，脚本会明确报「会话格式可能已变」并提示 `--from-file` 手工兜底（把结果文本存成文件再喂给它），而不是静默写出 0 条。
+
+**什么时候该存**：同一问题要做双引擎对照、结果要进产物、或要跨会话复用时。日常扫一眼不存——否则 `search-results/` 会堆满一次性东西，`grep index.jsonl` 反而更难找。
+
 ## 4. 已知局限
 
 1. **引擎很新**：2026-10-17 才对外开放，中文长尾语料覆盖弱于元宝（元宝底层是搜狗索引 + 腾讯生态）。
@@ -270,6 +301,8 @@ python ~/.workbuddy/skills/search-deep-read/scripts/dump.py <任一存档> --sta
 | 2026-11-04 | **改名 `deepseek-search` → `search-deep-read`**：流程本身与引擎无关，名字不该绑死 DeepSeek（`dump.py` 措辞同步改为“任意含 results 数组的 JSON”）。新增三条机制：① 预算丢弃显式提示 `⚠ 未展示 #11–#50`（此前 `--show 10` 是静默丢弃 40 条）；② 矛盾项改成三列表格（主张/引句/编号），便于跨条目比对；③ 规则「没读到不等于没问题」，未覆盖条目必须显式标注 |
 | 2026-11-04 | **取消默认的 authority 预过滤**：引擎顺序即 rerank 降序，二次过滤无收益且会漏掉低权威域上的好内容（实测漏掉模式白皮书/目录/实战文各一）。改为主轨读前 N 条、子轨读全 50，都不筛；`--min-authority` 降为可选开关 |
 | 2026-11-04 | **首次实跑派子智能体，修掉 3 个编号/易用性缺陷**（由子智能体的工具反馈暴露）：① 存档新增 `filters` 字段，`search.py --replay` 与 `dump.py` 都据此复现同一套过滤，此前 replay 会多出被过滤条目、编号从 #22 起错位；② `dump.py` 补上与 `search.py` 完全相同的 URL 去重，去掉最后一段偏差点；③ 新增 `--expand-only`（不再重打列表，省 2-3k 字符/次）、`--replay` 可省略占位查询词、dump 分数改成 `auth=3 rerank=1.83` 带标签、空标题回退 URL 末段。实测 33 条编号全部对齐 |
+| 2026-11-05 | v1.0.2–1.0.7：脱敏（示例查询改中性、脱掉英文课题 slug）、补 §0 快速开始与 LICENSE、建立公开仓与 `tools/export_public.py` 发布链、description 覆盖「检索」这一层（此前只描述深读，导致「只想用 DeepSeek 搜一下」不触发） |
+| 2026-11-06 | 新增 `scripts/save_yuanbao.py`：把内置 WebSearch（元宝）的结果转成同构存档（`engine: yuanbao`、按 `call_id` 去重、`--list`/`--pick` 可回溯历史查询）。**零上下文成本**——读会话记录而非重新输出文本。`dump.py` / `search.py` 遇到缺失的 `authority`/`rerank_score` 改为显示 `—`，不再伪造成 -1/0。版本 1.0.7 → 1.1.0 |
 
 ## 8. 与 LangChain deepagents 的关系（2026-11-04 评估）
 

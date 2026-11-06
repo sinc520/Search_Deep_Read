@@ -353,13 +353,26 @@ def _num(value: Any) -> float:
         return 0.0
 
 
+def _score(value: Any, digits: int) -> str:
+    """展示用：字段缺失写 —。排序仍走 _num，不受影响。
+
+    元宝的存档没有 authority / rerank_score，显示成 -1/0.00 会被误读为低分。
+    """
+    if value is None or value == "":
+        return "—"
+    try:
+        return f"{float(value):.{digits}f}"
+    except (TypeError, ValueError):
+        return "—"
+
+
 def format_compact(rows: list[dict[str, Any]], args: argparse.Namespace) -> str:
     if not rows:
         return "（无结果）"
     out: list[str] = []
     for i, r in enumerate(rows, 1):
         head = (
-            f"{i:>2}. [{_num(r.get('authority')):.0f}|{_num(r.get('rerank_score')):.2f}] "
+            f"{i:>2}. [{_score(r.get('authority'), 0)}|{_score(r.get('rerank_score'), 2)}] "
             f"{trim(r.get('title'), 80)} | {trim(display_site(r), 24)} "
             f"| {short_date(r.get('date'))} | {clean_url(r.get('url'))}"
         )
@@ -383,7 +396,7 @@ def format_expanded(rows: list[dict[str, Any]], indices: list[int], limit: int) 
         text = truncate_marked(body, limit) if limit > 0 else " ".join(body.split())
         out.append(
             f"\n=== [{idx}] {trim(r.get('title'), 100)}\n"
-            f"    {clean_url(r.get('url'))} · authority={_num(r.get('authority')):.0f} "
+            f"    {clean_url(r.get('url'))} · authority={_score(r.get('authority'), 0)} "
             f"· 全文 {len(body)} 字符\n{text}"
         )
     return "\n".join(out)
@@ -396,8 +409,8 @@ def format_md(rows: list[dict[str, Any]], args: argparse.Namespace) -> str:
     for i, r in enumerate(rows, 1):
         out.append(f"## {i}. [{trim(r.get('title'), 120)}]({clean_url(r.get('url'))})")
         out.append(
-            f"authority={_num(r.get('authority')):.0f} · "
-            f"rerank={_num(r.get('rerank_score')):.2f} · "
+            f"authority={_score(r.get('authority'), 0)} · "
+            f"rerank={_score(r.get('rerank_score'), 2)} · "
             f"{trim(display_site(r), 32)} · {short_date(r.get('date'))}"
         )
         body = r.get("content") if args.need_content else (r.get("summary") or r.get("snippet"))

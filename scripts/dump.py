@@ -204,8 +204,8 @@ def to_text(items: list[dict[str, Any]]) -> str:
     for item in items:
         # 分数带上标签：只有一个裸数字时，读者分不清是相关度还是别的合成分
         head = (
-            f"{item['index']:>2}. [auth={_as_num(item.get('authority')):.0f} "
-            f"rerank={_as_num(item.get('rerank_score')):.2f}] "
+            f"{item['index']:>2}. [auth={_fmt_score(item.get('authority'), 0)} "
+            f"rerank={_fmt_score(item.get('rerank_score'), 2)}] "
             f"{site_key(item)} | {norm_text(item.get('date'))[:10]} | "
             f"{display_title(item)}"
         )
@@ -224,6 +224,20 @@ def _as_num(value: Any) -> float:
         return float(value)
     except (TypeError, ValueError):
         return -1.0
+
+
+def _fmt_score(value: Any, digits: int) -> str:
+    """展示用：缺失就写 —，不要把 None 装作 -1 或 0。
+
+    元宝（内置 WebSearch）不返回 authority / rerank_score，若强行显示 -1.00，
+    读者会以为「这条被打成最低分」，而实际是「没有这个字段」。
+    """
+    if value is None or value == "":
+        return "—"
+    try:
+        return f"{float(value):.{digits}f}"
+    except (TypeError, ValueError):
+        return "—"
 
 
 def build_stats(items: list[dict[str, Any]], total: int, scope: str = "") -> str:
